@@ -2,7 +2,6 @@ import sys
 import os
 import matplotlib.image as mpimg
 import numpy as np
-from PIL import Image
 
 # Dimensions of input images
 IMG_WIDTH = 200
@@ -16,93 +15,28 @@ IMG_PATCH_STRIDE = 4
 OBJECTS_PATH = "../objects/"
 PATCHES_MEAN_PATH = OBJECTS_PATH + "patches_mean"
 RESULTS_PATH = "../results"
-  
-# roate by 45 degrees
-def rotate_45(switch,image):
-
-    if switch==1: # input is image and not label
-        colorImage  = Image.fromarray(np.uint8(image*255))
-        rotated     = colorImage.rotate(45)
-        rot=np.asarray(rotated)
-
-    else:
-        temp_img_188=np.uint8(image)
-        temp_img_881=temp_img_188.transpose()
-        temp_img_881=temp_img_881*255
-
-        # decreasing one dimension
-        temp_img_88=np.zeros((8,8))
-        for i in range(8):
-            for j in range(8):
-                temp_img_88[i][j]=temp_img_881[i][j][0]
-
-        colorImage  = Image.fromarray(temp_img_88)
-        rotated     = colorImage.rotate(45)
-        rot_88=np.asarray(rotated)
-
-        # increasing one dimension
-        rot_188=np.zeros((1,8,8))
-        for i in range(8):
-            for j in range(8):
-                rot_188[0][i][j]=rot_88[i][j]
-
-        rot=rot_188
-
-    return rot
 
 def zero_center(patches):
     #Zero centers patch data and caches their mean value to disk
 
-    if 1:
-#    if os.path.isfile(PATCHES_MEAN_PATH + ".npy"):
-#        mean_patch = np.load(PATCHES_MEAN_PATH + ".npy")  
-#    else:
-#        if not os.path.isdir(OBJECTS_PATH):            
-#            os.makedirs(OBJECTS_PATH)
+    if os.path.isfile(PATCHES_MEAN_PATH + ".npy"):
+        mean_patch = np.load(PATCHES_MEAN_PATH + ".npy")  
+    else:
+        if not os.path.isdir(OBJECTS_PATH):            
+            os.makedirs(OBJECTS_PATH)
         print("Computing mean patch")
-
-        full_length=len(patches)
-        quarter_length=int(full_length/4)
-
-        patches1=[]
-        patches2=[]
-        patches3=[]
-        patches4=[]
-        patches1=patches[0:quarter_length]
-        patches2=patches[quarter_length:2*quarter_length]
-        patches3=patches[2*quarter_length:3*quarter_length]
-        patches4=patches[3*quarter_length:full_length]
-
-        mean_patch1 = np.mean(patches1, axis=0)
-        mean_patch2 = np.mean(patches2, axis=0)
-        mean_patch3 = np.mean(patches3, axis=0)
-        mean_patch4 = np.mean(patches4, axis=0)
-
+        mean_patch = np.mean(patches, axis=0)
         print("Mean computed")
-        zero_centered_patches = patches - mean_patch1 - mean_patch2 - mean_patch3 - mean_patch4
+        np.save(PATCHES_MEAN_PATH, mean_patch)
+        print("Mean patch saved to the disk.")
 
-        patches1 = None
-        patches2=None
-        patches3=None
-        patches4=None
-
-        mean_patch1 = None
-        mean_patch2 = None
-        mean_patch3 = None
-        mean_patch4 = None
-
-    return zero_centered_patches
+    return patches - mean_patch
     
-def augment_image(switch,img, out_ls, num_of_transformations):
-    #Augments the input image img by a number of transformations (rotations by 90° and flips). 
-
-    # img1 is flipped image and img2 is rotated img. Both are augmented    
-
-    img1 = np.fliplr(img)
-    out_ls.append(img1)
-    
-    img2=rotate_45(switch,img)
-    out_ls.append(img2)
+def augment_image(img, out_ls, num_of_transformations):
+       #Augments the input image img by a number of transformations (rotations by 90° and flips). 
+        
+    img2 = np.fliplr(img)
+    out_ls.append(img)
 
     if num_of_transformations > 0:
         tmp = np.rot90(img)
@@ -153,7 +87,7 @@ def mirror_border(img, border_size):
 
     return res_img
 
-def img_crop(switch,im, patch_size, border_size, stride, num_of_transformations):
+def img_crop(im, patch_size, border_size, stride, num_of_transformations):
     # Extracts patches of size patch_size and stride stride from an image img """
     
     context_size = patch_size + 2 * border_size    
@@ -173,18 +107,18 @@ def img_crop(switch,im, patch_size, border_size, stride, num_of_transformations)
                 # [patch_size, patch_size, num_of_channels]
                 im_patch = im[j:j+context_size, i:i+context_size, :]
 
-            augment_image(switch,im_patch, list_patches, num_of_transformations)
+            augment_image(im_patch, list_patches, num_of_transformations)
 
     return list_patches    
 
-def input_img_crop(switch,im, patch_size, border_size, stride, num_of_transformations):
+def input_img_crop(im, patch_size, border_size, stride, num_of_transformations):
     #Crops an input image. Direct alias of img_crop
-    return img_crop(switch,im, patch_size, border_size, stride, num_of_transformations)
+    return img_crop(im, patch_size, border_size, stride, num_of_transformations)
     
 
-def label_img_crop(switch,im, patch_size, stride, num_of_transformations):
+def label_img_crop(im, patch_size, stride, num_of_transformations):
     #Crops a label image into patches    
-    return img_crop(switch,im, patch_size, 0, stride, num_of_transformations)
+    return img_crop(im, patch_size, 0, stride, num_of_transformations)
 
 def extract_data(filename_base, num_images, num_of_transformations=6, patch_size=IMG_PATCH_SIZE,
                  patch_stride=IMG_PATCH_STRIDE):
@@ -205,7 +139,7 @@ def extract_data(filename_base, num_images, num_of_transformations=6, patch_size
 
     data = []
     for i in range(num_images):
-        this_img_patches = input_img_crop(1,imgs[i], patch_size, IMG_BORDER_SIZE, patch_stride,
+        this_img_patches = input_img_crop(imgs[i], patch_size, IMG_BORDER_SIZE, patch_stride,
                                               num_of_transformations)
         data += this_img_patches
         print("\tcurrently have %d patches" % len(data))
@@ -218,7 +152,6 @@ def extract_data(filename_base, num_images, num_of_transformations=6, patch_size
     print("Cast successful")
     patches = zero_center(tmp)
     print("Patches have been zero centered.")
-
     return patches
 
 def value_to_class(v):
@@ -248,11 +181,9 @@ def extract_labels(filename_base, num_images, num_of_transformations=6, patch_si
 
     num_images = len(gt_imgs)
     print('Extracting patches...')
-
-    gt_patches = [label_img_crop(0,gt_imgs[i], patch_size, patch_stride, num_of_transformations)
+    gt_patches = [label_img_crop(gt_imgs[i], patch_size, patch_stride, num_of_transformations)
                   for i in range(num_images)]
     data = np.asarray([gt_patches[i][j] for i in range(len(gt_patches)) for j in range(len(gt_patches[i]))])
-
     labels = np.asarray([value_to_class(np.mean(data[i])) for i in range(len(data))])
     print(str(len(data)) + ' label patches extracted.')
 
